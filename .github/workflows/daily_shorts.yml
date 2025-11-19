@@ -1,0 +1,89 @@
+name: Daily Fashion Shorts Generator
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Run at 6 AM UTC daily
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Create necessary directories
+        run: |
+          mkdir -p output/videos
+          mkdir -p data
+      
+      - name: Run agent workflow
+        env:
+          # AI & Content Generation
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          
+          # Trend Detection
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
+          
+          # Media APIs
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          
+          # Upload credentials (stored as secrets)
+          YOUTUBE_CLIENT_SECRETS_FILE: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+          INSTAGRAM_USERNAME: ${{ secrets.INSTAGRAM_USERNAME }}
+          INSTAGRAM_PASSWORD: ${{ secrets.INSTAGRAM_PASSWORD }}
+          TWITTER_CONSUMER_KEY: ${{ secrets.TWITTER_CONSUMER_KEY }}
+          TWITTER_CONSUMER_SECRET: ${{ secrets.TWITTER_CONSUMER_SECRET }}
+          TWITTER_ACCESS_TOKEN_POST: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET_POST: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          
+          # Configuration
+          DAILY_VIDEOS_COUNT: 10
+          LOG_LEVEL: INFO
+        run: |
+          python main.py test
+      
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: agent-logs
+          path: agent.log
+          retention-days: 30
+      
+      - name: Upload database as artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: agent-database
+          path: data/agent.db
+          retention-days: 90
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Workflow failed! Check logs for details."
+          # Add notification logic here (email, Discord, Slack, etc.)

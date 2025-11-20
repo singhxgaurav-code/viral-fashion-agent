@@ -21,11 +21,19 @@ class TrendDetector:
     def __init__(self):
         self.reddit = None
         self.twitter = None
-        self.pytrends = TrendReq(hl='en-US', tz=360)
+        self.pytrends = None
         self._initialize_apis()
     
     def _initialize_apis(self):
         """Initialize API clients"""
+        # Google Trends (lazy initialization to avoid SSL issues)
+        try:
+            self.pytrends = TrendReq(hl='en-US', tz=360)
+            logger.info("Google Trends API initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Google Trends: {e}")
+            self.pytrends = None
+        
         # Reddit
         try:
             if config.REDDIT_CLIENT_ID and config.REDDIT_CLIENT_SECRET:
@@ -105,6 +113,10 @@ class TrendDetector:
     def _get_google_trends(self) -> List[Dict]:
         """Get trending fashion searches from Google"""
         trends = []
+        
+        if not self.pytrends:
+            logger.warning("Google Trends not initialized, skipping")
+            return trends
         
         try:
             # Real-time trending searches

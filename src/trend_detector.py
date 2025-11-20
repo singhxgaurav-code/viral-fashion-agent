@@ -69,6 +69,11 @@ class TrendDetector:
         all_trends.extend(self._get_twitter_trends())
         all_trends.extend(self._get_tiktok_trends())
         
+        # If no trends found (e.g., corporate firewall blocking APIs), use fallback
+        if not all_trends:
+            logger.warning("⚠️  No trends from APIs, using dynamic fallback trends")
+            all_trends = self._generate_fallback_trends(num_trends)
+        
         # Sort by score/relevance
         all_trends.sort(key=lambda x: x.get('score', 0), reverse=True)
         
@@ -214,22 +219,123 @@ class TrendDetector:
             response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                
-                # This is a simplified example - actual scraping would need more robust parsing
-                # Consider using TikTok's official API if available or alternative data sources
-                
-                trends.append({
-                    'source': 'tiktok',
-                    'title': 'Check TikTok trending manually',
-                    'keywords': ['fashion', 'tiktok'],
-                    'score': 50,
-                    'timestamp': datetime.now()
-                })
+                # TikTok scraping requires complex parsing and often gets blocked
+                # Instead, rely on the fallback trend generator
+                logger.info("TikTok: Using fallback trends (scraping blocked/unreliable)")
             
-            logger.info(f"Found {len(trends)} TikTok trends")
         except Exception as e:
-            logger.error(f"Error fetching TikTok trends: {e}")
+            logger.warning(f"TikTok trends unavailable: {e}")
+        
+        return trends  # Returns empty, fallback will be used
+    
+    def _generate_fallback_trends(self, num_trends: int) -> List[Dict]:
+        """Generate dynamic fallback trends when APIs are unavailable"""
+        import random
+        
+        # Curated fashion trend templates with variety
+        trend_templates = [
+            # Seasonal trends
+            "Winter layering essentials for {year}",
+            "Spring fashion must-haves",
+            "Summer outfit ideas that are trending",
+            "Fall wardrobe staples everyone needs",
+            
+            # Style trends
+            "Quiet luxury aesthetic explained",
+            "Old money style guide",
+            "Coastal grandmother fashion trend",
+            "Dark academia outfit ideas",
+            "Clean girl aesthetic looks",
+            "Y2K fashion comeback",
+            "90s minimalist style",
+            "Cottagecore outfit inspiration",
+            
+            # Specific items
+            "Oversized blazer styling tips",
+            "Wide leg pants outfit ideas",
+            "Platform shoes trend",
+            "Cargo pants comeback",
+            "Leather jacket outfit ideas",
+            "Chunky loafer styling",
+            "Maxi skirt outfit combinations",
+            "Trench coat style guide",
+            
+            # Color trends
+            "Dopamine dressing colors",
+            "Monochrome outfit ideas",
+            "Neutral tones fashion",
+            "Bold color blocking trends",
+            
+            # Sustainable fashion
+            "Thrift store fashion finds",
+            "Sustainable fashion brands",
+            "Capsule wardrobe essentials",
+            "Vintage clothing styling tips",
+            
+            # Celebrity/Influencer styles
+            "Bella Hadid street style",
+            "Hailey Bieber outfit recreation",
+            "Zendaya fashion moments",
+            "Korean street fashion trends",
+            
+            # Shopping guides
+            "Amazon fashion finds under $50",
+            "Zara trending items",
+            "H&M outfit ideas",
+            "Shein haul favorites",
+            
+            # Styling techniques
+            "How to style oversized clothing",
+            "Layering tips for petites",
+            "Outfit formulas that always work",
+            "Mix and match capsule wardrobe",
+            
+            # Accessories
+            "Trending jewelry 2025",
+            "Designer bag dupes",
+            "Sunglasses trends",
+            "Belt styling ideas",
+            
+            # Body type specific
+            "Fashion for curvy bodies",
+            "Tall girl outfit ideas",
+            "Petite styling hacks",
+            
+            # Occasion-based
+            "Date night outfit ideas",
+            "Business casual lookbook",
+            "Gym to brunch outfits",
+            "Wedding guest dress code",
+        ]
+        
+        # Shuffle to ensure randomness
+        random.shuffle(trend_templates)
+        
+        trends = []
+        current_year = datetime.now().year
+        
+        for i, template in enumerate(trend_templates[:num_trends]):
+            # Format template with current year if needed
+            title = template.format(year=current_year) if '{year}' in template else template
+            
+            # Extract keywords from title
+            keywords = self._extract_keywords(title)
+            if not keywords:
+                keywords = ['fashion', 'style', 'outfit']
+            
+            # Randomize score for variety in ordering
+            score = random.randint(100, 500)
+            
+            trends.append({
+                'source': 'fallback',
+                'title': title,
+                'keywords': keywords,
+                'score': score,
+                'timestamp': datetime.now(),
+                'description': f'Trending topic: {title}'
+            })
+            
+            logger.info(f"Generated fallback trend {i+1}: {title}")
         
         return trends
     

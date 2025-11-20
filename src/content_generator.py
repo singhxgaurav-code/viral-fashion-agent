@@ -330,19 +330,60 @@ Format as JSON:
         return optimized
     
     def _fallback_script(self, trend: Dict) -> str:
-        """Generate simple fallback script if AI fails"""
-        return f"""Did you know this is trending right now?
+        """Generate dynamic fallback script with variety"""
+        import random
+        
+        # Varied hook templates
+        hooks = [
+            f"This {trend['title']} trend is everywhere right now!",
+            f"POV: You just discovered {trend['title']}",
+            f"Everyone's obsessed with {trend['title']}",
+            f"Let me show you why {trend['title']} is viral",
+            f"3 reasons {trend['title']} is trending",
+            f"Stop scrolling! Here's the {trend['title']} trend explained",
+            f"You need to know about {trend['title']}",
+            f"The internet is going crazy over {trend['title']}",
+        ]
+        
+        # Varied tip frameworks
+        tip_frameworks = [
+            ["Unique style that stands out", "Easy to incorporate into your wardrobe", "Perfect for any season"],
+            ["Affordable and accessible", "Looks expensive on any budget", "Timeless yet trendy"],
+            ["Works for all body types", "Versatile styling options", "Instant outfit upgrade"],
+            ["Celebrity approved", "Social media favorite", "Runway to real life"],
+            ["Comfortable and practical", "Effortlessly chic", "Goes with everything"],
+            ["Sustainable fashion choice", "Investment piece", "Quality over quantity"],
+        ]
+        
+        # Varied CTAs
+        ctas = [
+            "Save this for your next shopping trip!",
+            "Follow for daily fashion inspiration!",
+            "Try this trend and tag me!",
+            "Comment which style you'd wear!",
+            "Share this with your fashion-loving friends!",
+            "Double tap if you're trying this!",
+            "Which look is your favorite? Let me know!",
+        ]
+        
+        # Build script with random variations
+        hook = random.choice(hooks)
+        tips = random.choice(tip_frameworks)
+        cta = random.choice(ctas)
+        
+        # Format tips
+        tip_bullets = "\n".join([f"• {tip}" for tip in tips])
+        
+        script = f"""{hook}
 
-{trend['title']}
+Here's why it works:
 
-Here's what makes it special:
-• Unique style
-• Easy to wear
-• Perfect for any occasion
+{tip_bullets}
 
-Try this trend and stand out!
-
-Follow for daily fashion tips!"""
+{cta}"""
+        
+        logger.info("Generated dynamic fallback script with varied content")
+        return script
     
     def _fallback_metadata(self, script: str, trend: Dict) -> Dict:
         """Generate simple fallback metadata"""

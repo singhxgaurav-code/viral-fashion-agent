@@ -109,46 +109,59 @@ class MediaCreator:
             return False
     
     def generate_voiceover(self, script: str, output_path: str) -> bool:
-        """Generate voiceover from script"""
-        try:
-            if self.tts_engine == 'edge':
-                # Edge-TTS (Microsoft, free, high quality)
-                import edge_tts
-                import asyncio
+        """Generate voiceover from script with automatic fallback"""
+        
+        # Try multiple TTS providers in order
+        providers = ['gtts', 'edge', 'coqui']
+        
+        for provider in providers:
+            try:
+                logger.info(f"Trying TTS provider: {provider}")
                 
-                async def generate():
-                    # Use different voices for variety
-                    voices = [
-                        'en-US-JennyNeural',  # Female
-                        'en-US-GuyNeural',     # Male
-                        'en-GB-SoniaNeural',   # British Female
-                        'en-AU-NatashaNeural'  # Australian Female
-                    ]
-                    voice = random.choice(voices)
+                if provider == 'gtts':
+                    # Google TTS (simple, works through most proxies)
+                    from gtts import gTTS
+                    tts = gTTS(text=script, lang='en', slow=False)
+                    tts.save(output_path)
+                    logger.info(f"✅ gTTS succeeded")
+                    return os.path.exists(output_path)
                     
-                    communicate = edge_tts.Communicate(script, voice)
-                    await communicate.save(output_path)
-                
-                asyncio.run(generate())
-                
-            elif self.tts_engine == 'coqui':
-                # Coqui TTS (local, open-source)
-                from TTS.api import TTS
-                tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
-                tts.tts_to_file(text=script, file_path=output_path)
-                
-            elif self.tts_engine == 'gtts':
-                # Google TTS (simple, fast)
-                from gtts import gTTS
-                tts = gTTS(text=script, lang='en', slow=False)
-                tts.save(output_path)
-            
-            logger.info(f"Generated voiceover: {output_path}")
-            return os.path.exists(output_path)
-            
-        except Exception as e:
-            logger.error(f"TTS generation failed: {e}")
-            return False
+                elif provider == 'edge':
+                    # Edge-TTS (Microsoft, free, high quality)
+                    import edge_tts
+                    import asyncio
+                    
+                    async def generate():
+                        # Use different voices for variety
+                        voices = [
+                            'en-US-JennyNeural',  # Female
+                            'en-US-GuyNeural',     # Male
+                            'en-GB-SoniaNeural',   # British Female
+                            'en-AU-NatashaNeural'  # Australian Female
+                        ]
+                        voice = random.choice(voices)
+                        
+                        communicate = edge_tts.Communicate(script, voice)
+                        await communicate.save(output_path)
+                    
+                    asyncio.run(generate())
+                    logger.info(f"✅ Edge-TTS succeeded")
+                    return os.path.exists(output_path)
+                    
+                elif provider == 'coqui':
+                    # Coqui TTS (local, open-source)
+                    from TTS.api import TTS
+                    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+                    tts.tts_to_file(text=script, file_path=output_path)
+                    logger.info(f"✅ Coqui TTS succeeded")
+                    return os.path.exists(output_path)
+                    
+            except Exception as e:
+                logger.warning(f"TTS provider {provider} failed: {e}")
+                continue
+        
+        logger.error("❌ All TTS providers failed")
+        return False
     
     def fetch_stock_videos(self, keywords: List[str], duration: float, aspect_ratio: str) -> List[VideoFileClip]:
         """Fetch stock video clips from Pexels"""

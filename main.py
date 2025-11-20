@@ -12,11 +12,11 @@ import schedule
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from trend_detector import TrendDetector
-from content_generator import ContentGenerator
-from media_creator import MediaCreator
-from uploaders import MultiPlatformUploader
-from database import Database
+from src.trend_detector import TrendDetector
+from src.content_generator import ContentGenerator
+from src.media_creator import MediaCreator
+from src.uploaders import MultiPlatformUploader
+from src.database import Database
 import config
 
 # Setup logging

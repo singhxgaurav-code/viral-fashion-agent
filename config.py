@@ -9,6 +9,9 @@ load_dotenv()
 # AI Configuration
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')  # Optional for HuggingFace free tier
+OLLAMA_ENABLED = os.getenv('OLLAMA_ENABLED', 'False').lower() == 'true'  # Local Ollama instance
+OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')  # Ollama API endpoint
 
 # Trend Detection
 REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID')

@@ -1,10 +1,11 @@
 """
-AI-powered content generation using Groq
+AI-powered content generation using multiple providers (Groq, HuggingFace, local models)
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
-from groq import Groq
 import random
+import requests
+import json
 
 import config
 
@@ -12,11 +13,165 @@ logger = logging.getLogger(__name__)
 
 
 class ContentGenerator:
-    """Generate video scripts and metadata using AI"""
+    """Generate video scripts and metadata using AI with automatic fallback"""
     
     def __init__(self):
-        self.client = Groq(api_key=config.GROQ_API_KEY)
-        self.model = "llama-3.1-70b-versatile"  # Fast and high quality
+        self.providers = []
+        self._initialize_providers()
+    
+    def _initialize_providers(self):
+        """Initialize available AI providers in order of preference"""
+        
+        # Provider 1: Groq (fastest, best quality)
+        if hasattr(config, 'GROQ_API_KEY') and config.GROQ_API_KEY and config.GROQ_API_KEY != 'your_groq_api_key_here':
+            try:
+                from groq import Groq
+                self.providers.append({
+                    'name': 'Groq',
+                    'client': Groq(api_key=config.GROQ_API_KEY),
+                    'model': 'llama-3.1-70b-versatile',
+                    'type': 'groq'
+                })
+                logger.info("✅ Groq provider initialized")
+            except Exception as e:
+                logger.warning(f"Groq initialization failed: {e}")
+        
+        # Provider 2: OpenAI (reliable, $5 free credits for new users)
+        if hasattr(config, 'OPENAI_API_KEY') and config.OPENAI_API_KEY and config.OPENAI_API_KEY != 'your_openai_api_key_here':
+            try:
+                from openai import OpenAI
+                self.providers.append({
+                    'name': 'OpenAI',
+                    'client': OpenAI(api_key=config.OPENAI_API_KEY),
+                    'model': 'gpt-3.5-turbo',  # Cheapest option
+                    'type': 'openai'
+                })
+                logger.info("✅ OpenAI provider initialized")
+            except Exception as e:
+                logger.warning(f"OpenAI initialization failed: {e}")
+        
+        # Provider 3: HuggingFace Inference API (free, but may be blocked by corporate proxies)
+        self.providers.append({
+            'name': 'HuggingFace',
+            'api_url': 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2',
+            'type': 'huggingface',
+            'headers': {}
+        })
+        logger.info("✅ HuggingFace provider initialized (free tier)")
+        
+        # Provider 4: Ollama (local, requires installation)
+        if hasattr(config, 'OLLAMA_ENABLED') and config.OLLAMA_ENABLED:
+            self.providers.append({
+                'name': 'Ollama',
+                'api_url': f"{config.OLLAMA_BASE_URL}/api/generate",
+                'model': 'llama2',
+                'type': 'ollama'
+            })
+            logger.info("✅ Ollama provider initialized (local)")
+        
+        if not self.providers:
+            logger.warning("⚠️  No AI providers available, will use fallback templates")
+        else:
+            logger.info(f"📊 {len(self.providers)} AI provider(s) available")
+    
+    def _call_ai(self, prompt: str, max_tokens: int = 300, temperature: float = 0.8) -> Optional[str]:
+        """
+        Call AI providers in order until one succeeds
+        
+        Args:
+            prompt: The prompt to send
+            max_tokens: Maximum tokens to generate
+            temperature: Creativity level (0-1)
+            
+        Returns:
+            Generated text or None if all providers fail
+        """
+        for provider in self.providers:
+            try:
+                logger.info(f"Trying {provider['name']}...")
+                
+                if provider['type'] == 'groq':
+                    response = provider['client'].chat.completions.create(
+                        messages=[{"role": "user", "content": prompt}],
+                        model=provider['model'],
+                        temperature=temperature,
+                        max_tokens=max_tokens
+                    )
+                    result = response.choices[0].message.content.strip()
+                    logger.info(f"✅ {provider['name']} succeeded")
+                    return result
+                
+                elif provider['type'] == 'openai':
+                    response = provider['client'].chat.completions.create(
+                        messages=[{"role": "user", "content": prompt}],
+                        model=provider['model'],
+                        temperature=temperature,
+                        max_tokens=max_tokens
+                    )
+                    result = response.choices[0].message.content.strip()
+                    logger.info(f"✅ {provider['name']} succeeded")
+                    return result
+                
+                elif provider['type'] == 'huggingface':
+                    # HuggingFace Inference API
+                    payload = {
+                        "inputs": prompt,
+                        "parameters": {
+                            "max_new_tokens": max_tokens,
+                            "temperature": temperature,
+                            "return_full_text": False
+                        }
+                    }
+                    response = requests.post(
+                        provider['api_url'],
+                        headers=provider['headers'],
+                        json=payload,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if isinstance(result, list) and len(result) > 0:
+                            text = result[0].get('generated_text', '')
+                            if text:
+                                logger.info(f"✅ {provider['name']} succeeded")
+                                return text.strip()
+                    
+                    # Handle rate limiting or model loading
+                    if response.status_code == 503:
+                        logger.warning(f"{provider['name']}: Model loading, trying next provider...")
+                        continue
+                    
+                    logger.warning(f"{provider['name']} failed: {response.status_code}")
+                
+                elif provider['type'] == 'ollama':
+                    # Ollama local API
+                    payload = {
+                        "model": provider['model'],
+                        "prompt": prompt,
+                        "stream": False
+                    }
+                    response = requests.post(
+                        provider['api_url'],
+                        json=payload,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json().get('response', '')
+                        if result:
+                            logger.info(f"✅ {provider['name']} succeeded")
+                            return result.strip()
+                
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"{provider['name']} network error: {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"{provider['name']} failed: {e}")
+                continue
+        
+        logger.error("❌ All AI providers failed")
+        return None
     
     def generate_script(self, trend: Dict, duration: int = 45) -> str:
         """
@@ -50,20 +205,14 @@ Requirements:
 
 Output only the script text, no extra formatting or labels."""
 
-        try:
-            response = self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model=self.model,
-                temperature=0.8,
-                max_tokens=300
-            )
-            
-            script = response.choices[0].message.content.strip()
+        # Try AI providers
+        script = self._call_ai(prompt, max_tokens=300, temperature=0.8)
+        
+        if script:
             logger.info(f"Generated script: {script[:50]}...")
             return script
-            
-        except Exception as e:
-            logger.error(f"Script generation failed: {e}")
+        else:
+            logger.warning("Using fallback script template")
             return self._fallback_script(trend)
     
     def generate_metadata(self, script: str, trend: Dict) -> Dict:
@@ -93,34 +242,31 @@ Format as JSON:
     "keywords": ["keyword1", ...]
 }}"""
 
-        try:
-            response = self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model=self.model,
-                temperature=0.7,
-                max_tokens=400
-            )
-            
-            import json
-            result = response.choices[0].message.content.strip()
-            
-            # Extract JSON from response
-            if '```json' in result:
-                result = result.split('```json')[1].split('```')[0]
-            elif '```' in result:
-                result = result.split('```')[1].split('```')[0]
-            
-            metadata = json.loads(result)
-            
-            # Add tags for all platforms
-            tags = metadata.get('hashtags', [])
-            metadata['tags'] = [tag.replace('#', '') for tag in tags]
-            
-            logger.info(f"Generated metadata: {metadata['title']}")
-            return metadata
-            
-        except Exception as e:
-            logger.error(f"Metadata generation failed: {e}")
+        # Try AI providers
+        result = self._call_ai(prompt, max_tokens=400, temperature=0.7)
+        
+        if result:
+            try:
+                # Extract JSON from response
+                if '```json' in result:
+                    result = result.split('```json')[1].split('```')[0]
+                elif '```' in result:
+                    result = result.split('```')[1].split('```')[0]
+                
+                metadata = json.loads(result)
+                
+                # Add tags for all platforms
+                tags = metadata.get('hashtags', [])
+                metadata['tags'] = [tag.replace('#', '') for tag in tags]
+                
+                logger.info(f"Generated metadata: {metadata['title']}")
+                return metadata
+            except Exception as e:
+                logger.error(f"Metadata parsing failed: {e}")
+                return self._fallback_metadata(script, trend)
+        else:
+            # All AI providers failed
+            logger.warning("All AI providers failed for metadata generation, using fallback")
             return self._fallback_metadata(script, trend)
     
     def generate_batch_content(self, trends: List[Dict], videos_per_trend: int = 1) -> List[Dict]:
